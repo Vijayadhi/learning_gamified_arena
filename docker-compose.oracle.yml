@@ -1,0 +1,15 @@
+services:
+  arena:
+    build: .
+    container_name: ai-services-arena
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PORT: 8080
+      COOKIE_SECURE: "true"
+      DATA_DIRECTORY: /data
+      LEARNERS_FILE: /app/config/learners.json
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - /var/lib/ai-services-arena:/data
