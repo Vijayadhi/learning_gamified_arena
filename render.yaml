@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: ai-services-gladiator-arena
+    runtime: docker
+    region: singapore
+    plan: starter
+    healthCheckPath: /
+    disk:
+      name: arena-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: FACILITATOR_EMAILS
+        sync: false
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: ALLOW_ALL_LEARNERS
+        value: "false"
+      - key: DATA_DIRECTORY
+        value: /data
+      - key: LEARNERS_FILE
+        value: /app/config/learners.json

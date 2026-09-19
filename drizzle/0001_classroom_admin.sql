@@ -1,0 +1,11 @@
+CREATE TABLE `subjects` (`id` text PRIMARY KEY NOT NULL, `title` text NOT NULL, `description` text DEFAULT '' NOT NULL, `color` text DEFAULT '#65d8b3' NOT NULL, `is_active` integer DEFAULT 1 NOT NULL, `created_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL);
+CREATE TABLE `learner_profiles` (`email` text PRIMARY KEY NOT NULL, `display_name` text DEFAULT '' NOT NULL, `is_active` integer DEFAULT 1 NOT NULL, `created_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL);
+CREATE TABLE `learner_subjects` (`email` text NOT NULL, `subject_id` text NOT NULL, `created_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL, PRIMARY KEY(`email`, `subject_id`));
+CREATE INDEX `idx_learner_subjects_subject` ON `learner_subjects` (`subject_id`);
+CREATE TABLE `learning_contents` (`id` text PRIMARY KEY NOT NULL, `subject_id` text NOT NULL, `title` text NOT NULL, `body` text NOT NULL, `created_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL);
+CREATE INDEX `idx_learning_contents_subject` ON `learning_contents` (`subject_id`);
+CREATE TABLE `managed_questions` (`id` text PRIMARY KEY NOT NULL, `subject_id` text NOT NULL, `content_id` text, `prompt` text NOT NULL, `answer` text NOT NULL, `why` text DEFAULT '' NOT NULL, `keywords` text DEFAULT '[]' NOT NULL, `difficulty` text DEFAULT 'Applied' NOT NULL, `is_active` integer DEFAULT 1 NOT NULL, `created_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL);
+CREATE INDEX `idx_managed_questions_subject` ON `managed_questions` (`subject_id`);
+CREATE TABLE `course_access` (`id` text PRIMARY KEY NOT NULL, `subject_id` text NOT NULL, `email` text NOT NULL, `access_code` text NOT NULL, `valid_from` text NOT NULL, `valid_until` text NOT NULL, `is_active` integer DEFAULT 1 NOT NULL, `created_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL);
+CREATE INDEX `idx_course_access_login` ON `course_access` (`email`, `access_code`);
+CREATE TABLE `admin_accounts` (`email` text PRIMARY KEY NOT NULL, `display_name` text DEFAULT '' NOT NULL, `password_hash` text NOT NULL, `is_active` integer DEFAULT 1 NOT NULL, `created_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL);

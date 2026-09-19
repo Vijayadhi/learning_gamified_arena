@@ -1,0 +1,23 @@
+services:
+  arena:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ai-services-gladiator-arena
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "${ARENA_PORT:-8080}:8080"
+    volumes:
+      - arena_data:/data
+      - ./config/learners.json:/app/config/learners.json:ro
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+volumes:
+  arena_data:

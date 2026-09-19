@@ -1,0 +1,11 @@
+node_modules
+dist
+.next
+.git
+.wrangler
+.sites-runtime
+*.zip
+*.tar.gz
+.env
+data
+tsconfig.tsbuildinfo
