@@ -61,8 +61,7 @@ jobs:
             --arg database_id "$CLOUDFLARE_D1_DATABASE_ID" \
             --arg facilitator_emails "$CLOUDFLARE_FACILITATOR_EMAILS" \
             --arg learners_json "$learners_json" \
-            '.d1_databases = (.d1_databases | map(if .binding == "DB" then .database_id = $database_id else . end))
-             | .migrations_dir = "../../drizzle"
+            '.d1_databases = (.d1_databases | map(if .binding == "DB" then (.database_id = $database_id | .migrations_dir = "../../drizzle") else . end))
              | .vars.STANDALONE_MODE = "true"
              | .vars.COOKIE_SECURE = "true"
              | .vars.FACILITATOR_EMAILS = $facilitator_emails
