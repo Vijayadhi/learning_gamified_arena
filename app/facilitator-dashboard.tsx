@@ -107,6 +107,10 @@ function AdminControls({ data, onChanged, error, setError }: { data: ClassroomSt
   const importRows = async (event: ChangeEvent<HTMLInputElement>, action: "learners" | "bulk-content" | "bulk-questions") => {
     const file = event.target.files?.[0]; if (!file) return; const text = await file.text();
     const records = parseImport(text); if (!records.length) { setError("The file has no readable data rows."); return; }
+    if (action === "learners") {
+      const invalidRows = records.filter((record) => !validEmailValue(record.email));
+      if (invalidRows.length) { setError(`Learner CSV must use email,name,batch columns. ${invalidRows.length} row(s) have an invalid email in the email column.`); return; }
+    }
     await save(action === "learners" ? { action, records, subjectId: learnerSubject, batchName: learnerBatch } : { action, subjectId: selectedSubject, records }); event.target.value = "";
   };
   const chooseLearner = (email: string) => { setLearnerEmail(email); setAssignments(data.assignments.filter((item) => item.email === email).map((item) => item.subjectId)); };
@@ -131,3 +135,4 @@ function parseImport(text: string): Array<Record<string, string>> {
   return rows.map((cells) => Object.fromEntries(headers.map((header, index) => [header, cells[index]?.trim() ?? ""]))).filter((row) => Object.values(row).some(Boolean));
 }
 function parseCsvLine(line: string) { const cells: string[] = []; let cell = "", quoted = false; for (let i = 0; i < line.length; i += 1) { const char = line[i]; if (char === '"' && line[i + 1] === '"') { cell += '"'; i += 1; } else if (char === '"') quoted = !quoted; else if (char === "," && !quoted) { cells.push(cell); cell = ""; } else cell += char; } cells.push(cell); return cells; }
+function validEmailValue(value: string | undefined) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((value ?? "").trim()); }

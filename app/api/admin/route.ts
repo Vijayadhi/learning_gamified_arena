@@ -59,8 +59,9 @@ export async function POST(request: Request) {
         batchId = existing ? String(existing.id) : batchId;
         if (!existing) statements.push(db.prepare("INSERT INTO learner_batches (id, subject_id, name) VALUES (?, ?, ?)").bind(batchId, subjectId, batchName));
       }
+      let invalidLearners = 0;
       for (const record of records) {
-        const email = normalizeEmail(clean(record.email)); if (!validEmail(email)) continue;
+        const email = normalizeEmail(clean(record.email)); if (!validEmail(email)) { invalidLearners += 1; continue; }
         statements.push(db.prepare("INSERT INTO learner_profiles (email, display_name, is_active) VALUES (?, ?, 1) ON CONFLICT(email) DO UPDATE SET display_name = CASE WHEN excluded.display_name <> '' THEN excluded.display_name ELSE learner_profiles.display_name END, is_active = 1").bind(email, clean(record.name) || clean(record.displayName)));
         statements.push(db.prepare("INSERT OR IGNORE INTO learner_subjects (email, subject_id) VALUES (?, ?)").bind(email, subjectId));
         const rowBatch = clean(record.batch) || batchName;
@@ -71,6 +72,7 @@ export async function POST(request: Request) {
           statements.push(db.prepare("INSERT OR IGNORE INTO learner_batch_members (batch_id, email) VALUES (?, ?)").bind(rowBatchId, email));
         }
       }
+      if (invalidLearners) throw new Error(`${invalidLearners} learner row(s) have an invalid email. Use CSV columns email,name,batch.`);
       if (!statements.length) throw new Error("No valid email addresses were found."); await db.batch(statements);
     } else if (action === "mcq-import") {
       const subjectId = clean(body.subjectId) || "ai-services";
