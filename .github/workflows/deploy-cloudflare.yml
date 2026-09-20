@@ -46,10 +46,16 @@ jobs:
           CLOUDFLARE_SESSION_SECRET: ${{ secrets.CLOUDFLARE_SESSION_SECRET }}
           CLOUDFLARE_FACILITATOR_EMAILS: ${{ secrets.CLOUDFLARE_FACILITATOR_EMAILS }}
         run: |
+          set -euo pipefail
           test -n "$CLOUDFLARE_D1_DATABASE_ID"
           test -n "$CLOUDFLARE_SESSION_SECRET"
           test "${#CLOUDFLARE_SESSION_SECRET}" -ge 32
           test -n "$CLOUDFLARE_FACILITATOR_EMAILS"
+          test -f dist/server/wrangler.json
+          jq -e 'any(.d1_databases[]?; .binding == "DB")' dist/server/wrangler.json >/dev/null || {
+            echo "No D1 binding named DB exists in dist/server/wrangler.json"
+            exit 1
+          }
           learners_json="$(jq -c . config/learners.json)"
           jq \
             --arg database_id "$CLOUDFLARE_D1_DATABASE_ID" \
@@ -64,11 +70,20 @@ jobs:
             dist/server/wrangler.json > dist/server/wrangler.json.tmp
           mv dist/server/wrangler.json.tmp dist/server/wrangler.json
 
+      - name: Validate Cloudflare configuration
+        run: |
+          set -euo pipefail
+          test -f "$GITHUB_WORKSPACE/dist/server/wrangler.json"
+          jq . "$GITHUB_WORKSPACE/dist/server/wrangler.json"
+          pnpm exec wrangler whoami
+
       - name: Apply D1 migrations
         run: |
+          set -euo pipefail
           pnpm exec wrangler d1 migrations apply DB \
             --remote \
-            --config dist/server/wrangler.json
+            --config "$GITHUB_WORKSPACE/dist/server/wrangler.json" \
+            --yes
 
       - name: Deploy Worker
         env:
