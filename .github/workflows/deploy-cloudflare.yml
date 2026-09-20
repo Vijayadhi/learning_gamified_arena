@@ -25,11 +25,14 @@ jobs:
         with:
           node-version: 22
 
-      - name: Enable pnpm
-        run: |
-          corepack enable
-          corepack install --global pnpm@11.25.0
-          pnpm --version
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+          run_install: false
+
+      - name: Verify pnpm
+        run: pnpm --version
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -50,13 +53,11 @@ jobs:
           learners_json="$(jq -c . config/learners.json)"
           jq \
             --arg database_id "$CLOUDFLARE_D1_DATABASE_ID" \
-            --arg session_secret "$CLOUDFLARE_SESSION_SECRET" \
             --arg facilitator_emails "$CLOUDFLARE_FACILITATOR_EMAILS" \
             --arg learners_json "$learners_json" \
-            '.d1_databases = (.d1_databases | map(if .binding == "DB" then .database_id = $database_id else . end))
+            '.d1_databases = (.d1_databases | map(if .binding == "DB" then (.database_id = $database_id | .migrations_dir = "drizzle") else . end))
              | .vars.STANDALONE_MODE = "true"
              | .vars.COOKIE_SECURE = "true"
-             | .vars.SESSION_SECRET = $session_secret
              | .vars.FACILITATOR_EMAILS = $facilitator_emails
              | .vars.ALLOWED_LEARNER_EMAILS_JSON = $learners_json' \
             dist/server/wrangler.json > dist/server/wrangler.json.tmp
@@ -69,6 +70,11 @@ jobs:
             --config dist/server/wrangler.json
 
       - name: Deploy Worker
+        env:
+          CLOUDFLARE_SESSION_SECRET: ${{ secrets.CLOUDFLARE_SESSION_SECRET }}
         run: |
           pnpm exec wrangler deploy \
             --config dist/server/wrangler.json
+          printf '%s' "$CLOUDFLARE_SESSION_SECRET" | \
+            pnpm exec wrangler secret put SESSION_SECRET \
+              --config dist/server/wrangler.json
