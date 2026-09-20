@@ -47,5 +47,6 @@ next-env.d.ts
 /.codex/
 /outputs/
 /work/
+cloudfare.txt
 
 /arena-deploy.tar
