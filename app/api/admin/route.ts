@@ -7,6 +7,7 @@ import { isFacilitator } from "@/lib/access";
 const database = () => { if (!env.DB) throw new Error("Learning database is not available."); return env.DB; };
 const clean = (value: unknown) => String(value ?? "").trim();
 const id = (prefix: string) => `${prefix}-${crypto.randomUUID().slice(0, 12)}`;
+const json = (value: unknown) => JSON.stringify(value);
 
 async function guard() {
   const user = await getChatGPTUser();
@@ -49,11 +50,46 @@ export async function POST(request: Request) {
     } else if (action === "learners") {
       const records = Array.isArray(body.records) ? body.records as Array<Record<string, unknown>> : [];
       const statements = [] as D1PreparedStatement[];
+      const subjectId = clean(body.subjectId) || "ai-services";
+      const batchName = clean(body.batchName);
+      let batchId = "";
+      if (batchName) {
+        batchId = id("batch");
+        const existing = await db.prepare("SELECT id FROM learner_batches WHERE subject_id = ? AND name = ? LIMIT 1").bind(subjectId, batchName).first<Record<string, unknown>>();
+        batchId = existing ? String(existing.id) : batchId;
+        if (!existing) statements.push(db.prepare("INSERT INTO learner_batches (id, subject_id, name) VALUES (?, ?, ?)").bind(batchId, subjectId, batchName));
+      }
       for (const record of records) {
         const email = normalizeEmail(clean(record.email)); if (!validEmail(email)) continue;
         statements.push(db.prepare("INSERT INTO learner_profiles (email, display_name, is_active) VALUES (?, ?, 1) ON CONFLICT(email) DO UPDATE SET display_name = CASE WHEN excluded.display_name <> '' THEN excluded.display_name ELSE learner_profiles.display_name END, is_active = 1").bind(email, clean(record.name) || clean(record.displayName)));
+        statements.push(db.prepare("INSERT OR IGNORE INTO learner_subjects (email, subject_id) VALUES (?, ?)").bind(email, subjectId));
+        const rowBatch = clean(record.batch) || batchName;
+        if (rowBatch) {
+          const rowBatchRecord = await db.prepare("SELECT id FROM learner_batches WHERE subject_id = ? AND name = ? LIMIT 1").bind(subjectId, rowBatch).first<Record<string, unknown>>();
+          const rowBatchId = rowBatchRecord ? String(rowBatchRecord.id) : (rowBatch === batchName ? batchId : id("batch"));
+          if (!rowBatchRecord) statements.push(db.prepare("INSERT INTO learner_batches (id, subject_id, name) VALUES (?, ?, ?)").bind(rowBatchId, subjectId, rowBatch));
+          statements.push(db.prepare("INSERT OR IGNORE INTO learner_batch_members (batch_id, email) VALUES (?, ?)").bind(rowBatchId, email));
+        }
       }
       if (!statements.length) throw new Error("No valid email addresses were found."); await db.batch(statements);
+    } else if (action === "mcq-import") {
+      const subjectId = clean(body.subjectId) || "ai-services";
+      const examTitle = clean(body.examTitle); const batchId = clean(body.batchId);
+      const records = Array.isArray(body.records) ? body.records as Array<Record<string, unknown>> : [];
+      if (!examTitle || !records.length) throw new Error("An exam title and at least one MCQ are required.");
+      const subject = await db.prepare("SELECT title FROM subjects WHERE id = ? AND is_active = 1").bind(subjectId).first<Record<string, unknown>>();
+      if (!subject) throw new Error("The selected subject does not exist or is inactive.");
+      const examId = id("exam");
+      const durationSeconds = Math.max(60, Number(body.durationSeconds) || 1800);
+      const statements = [db.prepare("INSERT INTO mcq_exams (id, subject_id, title, duration_seconds) VALUES (?, ?, ?, ?)").bind(examId, subjectId, examTitle, durationSeconds)];
+      for (const record of records) {
+        const options = [1, 2, 3, 4, 5].map((number) => clean(record[`option${number}`])).filter(Boolean);
+        const correctOption = Number(clean(record.correctoption) || clean(record.correct_option) || clean(record.answer));
+        if (!clean(record.question) || !clean(record.subject) || clean(record.subject).toLowerCase() !== String(subject.title).toLowerCase() || options.length < 4 || !Number.isInteger(correctOption) || correctOption < 1 || correctOption > options.length) throw new Error(`Each MCQ needs subject "${subject.title}", question, option1-option4, and a valid correctOption (1-5).`);
+        statements.push(db.prepare("INSERT INTO mcq_questions (id, exam_id, question, options, correct_option, explanation) VALUES (?, ?, ?, ?, ?, ?)").bind(id("mcq"), examId, clean(record.question), json(options), correctOption, clean(record.explanation)));
+      }
+      if (batchId) statements.push(db.prepare("INSERT INTO mcq_exam_batches (exam_id, batch_id) VALUES (?, ?)").bind(examId, batchId));
+      await db.batch(statements);
     } else if (action === "assignment") {
       const email = normalizeEmail(clean(body.email)); const subjectIds = Array.isArray(body.subjectIds) ? body.subjectIds.map(clean).filter(Boolean) : [];
       if (!validEmail(email)) throw new Error("Choose a learner.");

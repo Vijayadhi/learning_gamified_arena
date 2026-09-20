@@ -3,6 +3,8 @@ import { env } from "cloudflare:workers";
 export type ClassroomSubject = { id: string; title: string; description: string; color: string; isActive: boolean };
 export type ClassroomContent = { id: string; subjectId: string; title: string; body: string };
 export type ClassroomQuestion = { id: string; subjectId: string; contentId: string | null; prompt: string; answer: string; why: string; keywords: string[][]; difficulty: "Foundation" | "Applied" | "Challenge" };
+export type ClassroomBatch = { id: string; subjectId: string; name: string; members: number };
+export type ClassroomExam = { id: string; subjectId: string; title: string; durationSeconds: number; questionCount: number; batchIds: string[] };
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const normalizeEmail = (value: string) => value.trim().toLowerCase();
@@ -11,7 +13,7 @@ const db = () => { if (!env.DB) throw new Error("Learning database is not availa
 const row = (value: unknown) => value as Record<string, unknown>;
 
 export async function getClassroomState() {
-  const [subjectResult, learnerResult, assignmentResult, contentResult, questionResult, accessResult, adminResult] = await Promise.all([
+  const [subjectResult, learnerResult, assignmentResult, contentResult, questionResult, accessResult, adminResult, batchResult, examResult] = await Promise.all([
     db().prepare("SELECT id, title, description, color, is_active FROM subjects ORDER BY title").all(),
     db().prepare("SELECT email, display_name, is_active FROM learner_profiles ORDER BY email").all(),
     db().prepare("SELECT email, subject_id FROM learner_subjects ORDER BY email").all(),
@@ -19,6 +21,8 @@ export async function getClassroomState() {
     db().prepare("SELECT id, subject_id, content_id, prompt, answer, why, keywords, difficulty, is_active FROM managed_questions ORDER BY created_at DESC").all(),
     db().prepare("SELECT id, subject_id, email, access_code, valid_from, valid_until, is_active FROM course_access ORDER BY valid_from DESC").all(),
     db().prepare("SELECT email, display_name, is_active FROM admin_accounts ORDER BY email").all(),
+    db().prepare("SELECT b.id, b.subject_id, b.name, COUNT(m.email) AS members FROM learner_batches b LEFT JOIN learner_batch_members m ON m.batch_id = b.id GROUP BY b.id ORDER BY b.name").all(),
+    db().prepare("SELECT e.id, e.subject_id, e.title, e.duration_seconds, COUNT(q.id) AS question_count, GROUP_CONCAT(eb.batch_id) AS batch_ids FROM mcq_exams e LEFT JOIN mcq_questions q ON q.exam_id = e.id LEFT JOIN mcq_exam_batches eb ON eb.exam_id = e.id GROUP BY e.id ORDER BY e.created_at DESC").all(),
   ]);
   const subjects = (subjectResult.results ?? []).map(row).map((r) => ({ id: String(r.id), title: String(r.title), description: String(r.description), color: String(r.color), isActive: Boolean(r.is_active) }));
   return {
@@ -29,6 +33,8 @@ export async function getClassroomState() {
     questions: (questionResult.results ?? []).map(row).map((r) => ({ id: String(r.id), subjectId: String(r.subject_id), contentId: r.content_id ? String(r.content_id) : null, prompt: String(r.prompt), answer: String(r.answer), why: String(r.why), keywords: readKeywords(String(r.keywords)), difficulty: validDifficulty(String(r.difficulty)), isActive: Boolean(r.is_active) })),
     accessWindows: (accessResult.results ?? []).map(row).map((r) => ({ id: String(r.id), subjectId: String(r.subject_id), email: String(r.email), accessCode: String(r.access_code), validFrom: String(r.valid_from), validUntil: String(r.valid_until), isActive: Boolean(r.is_active) })),
     admins: (adminResult.results ?? []).map(row).map((r) => ({ email: String(r.email), displayName: String(r.display_name), isActive: Boolean(r.is_active) })),
+    batches: (batchResult.results ?? []).map(row).map((r) => ({ id: String(r.id), subjectId: String(r.subject_id), name: String(r.name), members: Number(r.members ?? 0) })),
+    exams: (examResult.results ?? []).map(row).map((r) => ({ id: String(r.id), subjectId: String(r.subject_id), title: String(r.title), durationSeconds: Number(r.duration_seconds), questionCount: Number(r.question_count ?? 0), batchIds: String(r.batch_ids ?? "").split(",").filter(Boolean) })),
   };
 }
 

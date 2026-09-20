@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 import {
-  Activity, ArrowRight, BarChart3, BookOpen, BrainCircuit, Check, ChevronRight, CircleHelp,
+  Activity, ArrowRight, BarChart3, BookOpen, BrainCircuit, Check, ChevronRight, CircleHelp, ClipboardCheck,
   Flame, Gauge, GraduationCap, LayoutDashboard, Medal, Menu, Radio, RefreshCw,
   Search, Sparkles, Swords, Target, Trophy, X, Zap,
 } from "lucide-react";
@@ -14,8 +14,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { QUESTIONS, TOPICS, getConcept, getQuestion, type ArenaQuestion, type Topic } from "@/lib/content";
 import type { DashboardData } from "@/db/arena";
 import { FacilitatorDashboard } from "@/app/facilitator-dashboard";
+import { McqExamView } from "@/app/mcq-exam";
 
-type View = "dashboard" | "learn" | "arena" | "review" | "facilitator";
+type View = "dashboard" | "learn" | "arena" | "review" | "exams" | "facilitator";
 type AttemptResult = {
   score: number; cleared: boolean; matched: string[]; missing: string[]; summary: string;
   conceptTitle: string; modelAnswer: string; why: string;
@@ -27,6 +28,7 @@ const navItems: Array<{ id: View; label: string; icon: typeof LayoutDashboard }>
   { id: "learn", label: "Learning Deck", icon: BookOpen },
   { id: "arena", label: "Challenge Arena", icon: Swords },
   { id: "review", label: "Answer Review", icon: GraduationCap },
+  { id: "exams", label: "MCQ Exams", icon: ClipboardCheck },
   { id: "facilitator", label: "Overall Dashboard", icon: BarChart3 },
 ];
 
@@ -131,6 +133,7 @@ export function ArenaApp({ user, initialDashboard, signOutPath, isFacilitator }:
           {view === "learn" && <LearnView dashboard={dashboard} topics={availableTopics} questions={allQuestions} selectedTopic={selectedTopic} setSelectedTopic={setSelectedTopic} search={search} setSearch={setSearch} onPractice={selectQuestion} />}
           {view === "arena" && <ArenaView topics={availableTopics} question={question} answer={answer} setAnswer={setAnswer} confidence={confidence} setConfidence={setConfidence} result={result} submitting={submitting} selectedTopic={selectedTopic} setSelectedTopic={(id) => { setSelectedTopic(id); const next = allQuestions.find((item) => item.topicId === id); if (next) selectQuestion(next); }} source={source} setSource={setSource} queue={filteredQuestions} clearedIds={clearedIds} onSelect={selectQuestion} onSubmit={submitAnswer} onNext={nextQuestion} />}
           {view === "review" && <ReviewView dashboard={dashboard} onRetry={(id) => { const retry = getQuestion(id); if (retry) selectQuestion(retry); }} />}
+          {view === "exams" && <McqExamView />}
           {view === "facilitator" && isFacilitator && <FacilitatorDashboard />}
         </div>
       </main>

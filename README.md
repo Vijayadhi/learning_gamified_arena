@@ -15,8 +15,10 @@ password-protected administrator account. The management screen lets an admin:
 - add other administrators or reset an administrator password.
 
 CSV headings are `title,body` for learning material, `prompt,answer,why,keywords,difficulty`
-for questions, and `email,name` for learners. JSON uploads use an array of objects
-with the same field names.
+for written-answer questions, and `email,name,batch` for learners. JSON uploads use an array of objects
+with the same field names. Learner bulk upload selects the enrollment subject and can assign every row to one batch.
+
+MCQ exams are imported separately with `question,option1,option2,option3,option4,correctOption,subject` and optional `option5,explanation` columns. The admin selects the exam duration and learner batch; learners receive a separate timed MCQ view, and the Overall Dashboard reports name, email, score, duration and percentage after submission.
 
 ## Render deployment
 
