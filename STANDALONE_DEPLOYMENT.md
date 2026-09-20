@@ -80,3 +80,17 @@ Add these GitHub repository secrets before running the workflow:
 - `ORACLE_KNOWN_HOSTS`: the matching `known_hosts` line for the VM.
 
 The remote VM must already have Docker, `/opt/ai-services-arena/.env`, and `/var/lib/ai-services-arena`. Run the workflow manually from the Actions tab or push to `main`.
+
+## Cloudflare Workers deployment
+
+The `.github/workflows/deploy-cloudflare.yml` workflow builds and deploys the existing Vinext Worker on a GitHub-hosted runner, so the Oracle VM's memory limit is avoided. It applies the checked-in D1 migration before deploying.
+
+Create a Cloudflare D1 database, then add these GitHub repository secrets:
+
+- `CLOUDFLARE_API_TOKEN`: an API token with Workers Scripts edit and D1 edit permissions.
+- `CLOUDFLARE_ACCOUNT_ID`: the Cloudflare account ID.
+- `CLOUDFLARE_D1_DATABASE_ID`: the ID of the new D1 database.
+- `CLOUDFLARE_SESSION_SECRET`: a random value of at least 32 characters.
+- `CLOUDFLARE_FACILITATOR_EMAILS`: `venerablevignesh@gmail.com`.
+
+Run **Deploy to Cloudflare Workers** from the Actions tab. The first bootstrap facilitator email remains `venerablevignesh@gmail.com`; set it through the deployed application's configuration mechanism before using the admin dashboard.

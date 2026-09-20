@@ -1,0 +1,72 @@
+name: Deploy to Cloudflare Workers
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+env:
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Enable pnpm
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Worker
+        run: pnpm build
+
+      - name: Inject production D1 database ID
+        env:
+          CLOUDFLARE_D1_DATABASE_ID: ${{ secrets.CLOUDFLARE_D1_DATABASE_ID }}
+          CLOUDFLARE_SESSION_SECRET: ${{ secrets.CLOUDFLARE_SESSION_SECRET }}
+          CLOUDFLARE_FACILITATOR_EMAILS: ${{ secrets.CLOUDFLARE_FACILITATOR_EMAILS }}
+        run: |
+          test -n "$CLOUDFLARE_D1_DATABASE_ID"
+          test -n "$CLOUDFLARE_SESSION_SECRET"
+          test "${#CLOUDFLARE_SESSION_SECRET}" -ge 32
+          test -n "$CLOUDFLARE_FACILITATOR_EMAILS"
+          learners_json="$(jq -c . config/learners.json)"
+          jq \
+            --arg database_id "$CLOUDFLARE_D1_DATABASE_ID" \
+            --arg session_secret "$CLOUDFLARE_SESSION_SECRET" \
+            --arg facilitator_emails "$CLOUDFLARE_FACILITATOR_EMAILS" \
+            --arg learners_json "$learners_json" \
+            '.d1_databases = (.d1_databases | map(if .binding == "DB" then .database_id = $database_id else . end))
+             | .vars.STANDALONE_MODE = "true"
+             | .vars.COOKIE_SECURE = "true"
+             | .vars.SESSION_SECRET = $session_secret
+             | .vars.FACILITATOR_EMAILS = $facilitator_emails
+             | .vars.ALLOWED_LEARNER_EMAILS_JSON = $learners_json' \
+            dist/server/wrangler.json > dist/server/wrangler.json.tmp
+          mv dist/server/wrangler.json.tmp dist/server/wrangler.json
+
+      - name: Apply D1 migrations
+        run: |
+          pnpm exec wrangler d1 migrations apply DB \
+            --remote \
+            --config dist/server/wrangler.json
+
+      - name: Deploy Worker
+        run: |
+          pnpm exec wrangler deploy \
+            --config dist/server/wrangler.json
