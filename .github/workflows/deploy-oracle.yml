@@ -1,0 +1,99 @@
+name: Build and deploy to Oracle
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+env:
+  IMAGE_NAME: ai-services-arena:oracle
+  CONTAINER_NAME: ai-services-arena
+  REMOTE_DIR: /opt/ai-services-arena
+  REMOTE_IMAGE: /tmp/ai-services-arena-image.tar.gz
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        run: docker build --tag "$IMAGE_NAME" .
+
+      - name: Export image
+        run: docker save "$IMAGE_NAME" | gzip -1 > ai-services-arena-image.tar.gz
+
+      - name: Configure SSH
+        env:
+          ORACLE_SSH_KEY: ${{ secrets.ORACLE_SSH_KEY }}
+          ORACLE_KNOWN_HOSTS: ${{ secrets.ORACLE_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$ORACLE_SSH_KEY" > "$HOME/.ssh/oracle.key"
+          printf '%s\n' "$ORACLE_KNOWN_HOSTS" > "$HOME/.ssh/oracle.known_hosts"
+          chmod 600 "$HOME/.ssh/oracle.key" "$HOME/.ssh/oracle.known_hosts"
+
+      - name: Upload image
+        env:
+          ORACLE_HOST: ${{ secrets.ORACLE_HOST }}
+          ORACLE_USER: ${{ secrets.ORACLE_USER }}
+        run: |
+          scp \
+            -i "$HOME/.ssh/oracle.key" \
+            -o IdentitiesOnly=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/oracle.known_hosts" \
+            -o StrictHostKeyChecking=yes \
+            ai-services-arena-image.tar.gz \
+            "$ORACLE_USER@$ORACLE_HOST:$REMOTE_IMAGE"
+
+      - name: Deploy isolated container
+        env:
+          ORACLE_HOST: ${{ secrets.ORACLE_HOST }}
+          ORACLE_USER: ${{ secrets.ORACLE_USER }}
+        run: |
+          ssh \
+            -i "$HOME/.ssh/oracle.key" \
+            -o IdentitiesOnly=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/oracle.known_hosts" \
+            -o StrictHostKeyChecking=yes \
+            "$ORACLE_USER@$ORACLE_HOST" \
+            "IMAGE_NAME='$IMAGE_NAME' CONTAINER_NAME='$CONTAINER_NAME' REMOTE_DIR='$REMOTE_DIR' REMOTE_IMAGE='$REMOTE_IMAGE' bash -s" <<'REMOTE_SCRIPT'
+          set -eu
+          test -f "$REMOTE_DIR/.env"
+          sudo docker load < "$REMOTE_IMAGE"
+          sudo docker rm -f "$CONTAINER_NAME" 2>/dev/null || true
+          sudo docker run -d \
+            --name "$CONTAINER_NAME" \
+            --restart unless-stopped \
+            --env-file "$REMOTE_DIR/.env" \
+            --env PORT=8080 \
+            --env COOKIE_SECURE=true \
+            --env DATA_DIRECTORY=/data \
+            --env LEARNERS_FILE=/app/config/learners.json \
+            --publish 127.0.0.1:8080:8080 \
+            --volume /var/lib/ai-services-arena:/data \
+            "$IMAGE_NAME"
+          rm -f "$REMOTE_IMAGE"
+          sudo docker ps --filter "name=^/$CONTAINER_NAME$" --format '{{.Names}} {{.Status}}'
+          REMOTE_SCRIPT
+
+      - name: Health check
+        env:
+          ORACLE_HOST: ${{ secrets.ORACLE_HOST }}
+          ORACLE_USER: ${{ secrets.ORACLE_USER }}
+        run: |
+          ssh \
+            -i "$HOME/.ssh/oracle.key" \
+            -o IdentitiesOnly=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/oracle.known_hosts" \
+            -o StrictHostKeyChecking=yes \
+            "$ORACLE_USER@$ORACLE_HOST" \
+            'curl --fail --silent --show-error --retry 12 --retry-delay 2 http://127.0.0.1:8080/ >/dev/null'

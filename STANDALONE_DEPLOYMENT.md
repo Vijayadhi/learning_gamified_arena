@@ -67,3 +67,16 @@ Removing an email blocks its future sessions immediately after the restart; its 
 - Keep `.env` outside version control.
 - Back up the `arena_data` volume.
 - Email-only access does not verify mailbox ownership. For an open/public deployment, replace it with magic-link or OTP authentication.
+
+## GitHub Actions deployment to Oracle
+
+The `.github/workflows/deploy-oracle.yml` workflow builds the image on a GitHub-hosted runner, uploads it to Oracle, and replaces only the `ai-services-arena` container. The existing Oracle `.env` and `/var/lib/ai-services-arena` data directory are preserved. The arena is bound to `127.0.0.1:8080`; the workflow does not stop or reconfigure other containers.
+
+Add these GitHub repository secrets before running the workflow:
+
+- `ORACLE_HOST`: the Oracle VM address.
+- `ORACLE_USER`: the SSH login, usually `ubuntu`.
+- `ORACLE_SSH_KEY`: the complete private SSH key.
+- `ORACLE_KNOWN_HOSTS`: the matching `known_hosts` line for the VM.
+
+The remote VM must already have Docker, `/opt/ai-services-arena/.env`, and `/var/lib/ai-services-arena`. Run the workflow manually from the Actions tab or push to `main`.
