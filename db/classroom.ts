@@ -22,7 +22,7 @@ export async function getClassroomState() {
     db().prepare("SELECT id, subject_id, email, access_code, valid_from, valid_until, is_active FROM course_access ORDER BY valid_from DESC").all(),
     db().prepare("SELECT email, display_name, is_active FROM admin_accounts ORDER BY email").all(),
     db().prepare("SELECT b.id, b.subject_id, b.name, COUNT(m.email) AS members FROM learner_batches b LEFT JOIN learner_batch_members m ON m.batch_id = b.id GROUP BY b.id ORDER BY b.name").all(),
-    db().prepare("SELECT e.id, e.subject_id, e.title, e.duration_seconds, COUNT(q.id) AS question_count, GROUP_CONCAT(eb.batch_id) AS batch_ids FROM mcq_exams e LEFT JOIN mcq_questions q ON q.exam_id = e.id LEFT JOIN mcq_exam_batches eb ON eb.exam_id = e.id GROUP BY e.id ORDER BY e.created_at DESC").all(),
+    db().prepare("SELECT e.id, e.subject_id, e.title, e.duration_seconds, COUNT(DISTINCT q.id) AS question_count, GROUP_CONCAT(DISTINCT eb.batch_id) AS batch_ids FROM mcq_exams e LEFT JOIN mcq_questions q ON q.exam_id = e.id LEFT JOIN mcq_exam_batches eb ON eb.exam_id = e.id GROUP BY e.id ORDER BY e.created_at DESC").all(),
   ]);
   const subjects = (subjectResult.results ?? []).map(row).map((r) => ({ id: String(r.id), title: String(r.title), description: String(r.description), color: String(r.color), isActive: Boolean(r.is_active) }));
   return {

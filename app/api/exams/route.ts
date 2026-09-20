@@ -25,6 +25,7 @@ async function canTake(examId: string, email: string) {
         SELECT 1 FROM mcq_exam_batches eb JOIN learner_batch_members lbm ON lbm.batch_id = eb.batch_id
         WHERE eb.exam_id = e.id AND lbm.email = ?
       )
+      )
   `).bind(examId, email, email).first();
   return Boolean(access);
 }
@@ -68,10 +69,11 @@ export async function POST(request: Request) {
       const existing = await db.prepare("SELECT id, started_at, completed_at FROM mcq_attempts WHERE exam_id = ? AND email = ? LIMIT 1").bind(examId, user.email).first<Record<string, unknown>>();
       if (existing?.completed_at) return NextResponse.json({ error: "You have already completed this exam." }, { status: 409 });
       const attemptId = existing ? String(existing.id) : id();
-      if (!existing) await db.prepare("INSERT INTO mcq_attempts (id, exam_id, email, started_at) VALUES (?, ?, ?, ?)").bind(attemptId, examId, user.email, new Date().toISOString()).run();
+      const startedAt = existing ? String(existing.started_at) : new Date().toISOString();
+      if (!existing) await db.prepare("INSERT INTO mcq_attempts (id, exam_id, email, started_at) VALUES (?, ?, ?, ?)").bind(attemptId, examId, user.email, startedAt).run();
       const exam = await db.prepare("SELECT id, title, duration_seconds FROM mcq_exams WHERE id = ?").bind(examId).first<Record<string, unknown>>();
       const questions = await db.prepare("SELECT id, question, options FROM mcq_questions WHERE exam_id = ? ORDER BY created_at").bind(examId).all();
-      return NextResponse.json({ attemptId, exam, questions: (questions.results ?? []).map((value) => { const item = row(value); return { id: String(item.id), question: String(item.question), options: JSON.parse(String(item.options)) }; }) });
+      return NextResponse.json({ attemptId, startedAt, exam, questions: (questions.results ?? []).map((value) => { const item = row(value); return { id: String(item.id), question: String(item.question), options: JSON.parse(String(item.options)) }; }) });
     }
     if (action === "submit") {
       const attemptId = clean(body.attemptId); const answers = Array.isArray(body.answers) ? body.answers as Array<Record<string, unknown>> : [];
