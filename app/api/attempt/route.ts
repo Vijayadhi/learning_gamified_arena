@@ -32,7 +32,8 @@ export async function POST(request: Request) {
   const question = getQuestion(parsed.data.questionId);
   const catalog = await userCatalog(user.email, user.subjectId);
   const managed = catalog?.questions.find((item) => item.id === parsed.data.questionId);
-  if ((!question || (catalog.restricted && !catalog.subjectIds.includes(question.topicId))) && !managed) return NextResponse.json({ error: "Question not found or not assigned to you." }, { status: 404 });
+  const canUseBuiltInDeck = catalog.subjectIds.includes("ai-services");
+  if ((!question || (catalog.restricted && !canUseBuiltInDeck && !catalog.subjectIds.includes(question.topicId))) && !managed) return NextResponse.json({ error: "Question not found or not assigned to you." }, { status: 404 });
   const concept = question ? getConcept(question.conceptKey) : null;
   if (question && !concept) return NextResponse.json({ error: "Learning concept not found." }, { status: 404 });
 

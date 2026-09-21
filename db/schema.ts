@@ -51,6 +51,26 @@ export const adminAccounts = sqliteTable("admin_accounts", {
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const learnerBatches = sqliteTable("learner_batches", {
+  id: text("id").primaryKey(), subjectId: text("subject_id").notNull(), name: text("name").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const learnerBatchMembers = sqliteTable("learner_batch_members", {
+  batchId: text("batch_id").notNull(), email: text("email").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [primaryKey({ columns: [table.batchId, table.email] })]);
+
+export const subjectAccessKeys = sqliteTable("subject_access_keys", {
+  id: text("id").primaryKey(), subjectId: text("subject_id").notNull(), batchId: text("batch_id").notNull(), accessCode: text("access_code").notNull(), validFrom: text("valid_from").notNull(), validUntil: text("valid_until").notNull(), isActive: integer("is_active").notNull().default(1),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const learnerSubjectStatus = sqliteTable("learner_subject_status", {
+  email: text("email").notNull(), subjectId: text("subject_id").notNull(), isActive: integer("is_active").notNull().default(1),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [primaryKey({ columns: [table.email, table.subjectId] })]);
+
 export const attempts = sqliteTable("attempts", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull(),

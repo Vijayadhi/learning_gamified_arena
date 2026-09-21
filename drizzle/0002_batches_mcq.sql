@@ -11,8 +11,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS `idx_mcq_attempts_exam_email` ON `mcq_attempts
 CREATE TABLE IF NOT EXISTS `mcq_answers` (`attempt_id` text NOT NULL, `question_id` text NOT NULL, `selected_option` integer NOT NULL, `is_correct` integer NOT NULL, PRIMARY KEY(`attempt_id`, `question_id`));
 
 INSERT OR IGNORE INTO subjects (id, title, description, color, is_active) VALUES ('ai-services', 'AI Services', 'AI Services learning materials and assessments', '#65d8b3', 1);
-UPDATE learning_contents SET subject_id = 'ai-services' WHERE subject_id <> 'ai-services';
-UPDATE managed_questions SET subject_id = 'ai-services' WHERE subject_id <> 'ai-services';
-UPDATE course_access SET subject_id = 'ai-services' WHERE subject_id <> 'ai-services';
-DELETE FROM learner_subjects;
-INSERT OR IGNORE INTO learner_subjects (email, subject_id) SELECT email, 'ai-services' FROM learner_profiles WHERE is_active = 1;
+INSERT OR IGNORE INTO learner_subjects (email, subject_id)
+SELECT email, 'ai-services'
+FROM learner_profiles
+WHERE is_active = 1
+  AND NOT EXISTS (SELECT 1 FROM learner_subjects WHERE learner_subjects.email = learner_profiles.email);

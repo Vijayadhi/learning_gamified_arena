@@ -81,11 +81,17 @@ export function ArenaApp({ user, initialDashboard, signOutPath, isFacilitator }:
 
   useEffect(() => { fetch("/api/catalog", { cache: "no-store" }).then(async (response) => response.ok ? setCatalog(await response.json() as LearnerCatalog) : undefined).catch(() => undefined); }, []);
   const availableTopics = useMemo<Topic[]>(() => {
-    const builtIn = catalog?.restricted ? TOPICS.filter((topic) => catalog.subjectIds.includes(topic.id)) : TOPICS;
-    const managed = (catalog?.subjects ?? []).map((subject) => ({ id: subject.id, title: subject.title, short: subject.description || "Instructor-managed learning", color: subject.color, icon: "BookOpen", outcome: subject.description || "Complete the learning content and practice its questions.", concepts: (catalog?.contents ?? []).filter((content) => content.subjectId === subject.id).map((content) => ({ key: `managed-${content.id}`, title: content.title, answer: content.body, why: "This learning content was added by your instructor.", keywords: [] })) }));
+    // ai-services is the umbrella enrolment for the original built-in deck.
+    const hasAiServices = catalog?.subjectIds.includes("ai-services") ?? false;
+    const builtIn = !catalog?.restricted || hasAiServices ? TOPICS : TOPICS.filter((topic) => catalog.subjectIds.includes(topic.id));
+    const managed = (catalog?.subjects ?? []).filter((subject) => subject.id !== "ai-services").map((subject) => ({ id: subject.id, title: subject.title, short: subject.description || "Instructor-managed learning", color: subject.color, icon: "BookOpen", outcome: subject.description || "Complete the learning content and practice its questions.", concepts: (catalog?.contents ?? []).filter((content) => content.subjectId === subject.id).map((content) => ({ key: `managed-${content.id}`, title: content.title, answer: content.body, why: "This learning content was added by your instructor.", keywords: [] })) }));
     return [...builtIn, ...managed];
   }, [catalog]);
-  const allQuestions = useMemo<ArenaQuestion[]>(() => [...(catalog?.restricted ? QUESTIONS.filter((item) => catalog.subjectIds.includes(item.topicId)) : QUESTIONS), ...(catalog?.questions ?? []).map((item, index) => ({ id: item.id, source: "Core" as const, number: index + 1, topicId: item.subjectId, conceptKey: item.contentId ? `managed-${item.contentId}` : "", prompt: item.prompt, difficulty: item.difficulty }))], [catalog]);
+  const allQuestions = useMemo<ArenaQuestion[]>(() => {
+    const hasAiServices = catalog?.subjectIds.includes("ai-services") ?? false;
+    const builtIn = !catalog?.restricted || hasAiServices ? QUESTIONS : QUESTIONS.filter((item) => catalog.subjectIds.includes(item.topicId));
+    return [...builtIn, ...(catalog?.questions ?? []).map((item, index) => ({ id: item.id, source: "Core" as const, number: index + 1, topicId: item.subjectId, conceptKey: item.contentId ? `managed-${item.contentId}` : "", prompt: item.prompt, difficulty: item.difficulty }))];
+  }, [catalog]);
   useEffect(() => { if (!availableTopics.some((topic) => topic.id === selectedTopic) && availableTopics[0]) setSelectedTopic(availableTopics[0].id); }, [availableTopics, selectedTopic]);
 
   const clearedIds = useMemo(() => new Set(dashboard.clearedQuestionIds), [dashboard.clearedQuestionIds]);

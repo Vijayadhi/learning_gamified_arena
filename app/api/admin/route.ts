@@ -94,6 +94,25 @@ export async function POST(request: Request) {
       await db.prepare("INSERT INTO mcq_exams (id, subject_id, title, duration_seconds) VALUES (?, ?, ?, ?)").bind(examId, subjectId, examTitle, durationSeconds).run();
       for (let index = 0; index < questionStatements.length; index += 80) await db.batch(questionStatements.slice(index, index + 80));
       if (batchId) await db.prepare("INSERT INTO mcq_exam_batches (exam_id, batch_id) VALUES (?, ?)").bind(examId, batchId).run();
+    } else if (action === "learner") {
+      const email = normalizeEmail(clean(body.email)); const displayName = clean(body.name); const subjectId = clean(body.subjectId) || "ai-services"; const batchName = clean(body.batchName);
+      if (!validEmail(email) || !displayName) throw new Error("Enter a valid learner name and email.");
+      await db.prepare("INSERT INTO learner_profiles (email, display_name, is_active) VALUES (?, ?, 1) ON CONFLICT(email) DO UPDATE SET display_name = excluded.display_name, is_active = 1").bind(email, displayName).run();
+      await db.prepare("INSERT OR IGNORE INTO learner_subjects (email, subject_id) VALUES (?, ?)").bind(email, subjectId).run();
+      await db.prepare("INSERT OR REPLACE INTO learner_subject_status (email, subject_id, is_active, updated_at) VALUES (?, ?, 1, CURRENT_TIMESTAMP)").bind(email, subjectId).run();
+      if (batchName) {
+        const existing = await db.prepare("SELECT id FROM learner_batches WHERE subject_id = ? AND name = ? LIMIT 1").bind(subjectId, batchName).first<Record<string, unknown>>();
+        const batchId = existing ? String(existing.id) : id("batch");
+        if (!existing) await db.prepare("INSERT INTO learner_batches (id, subject_id, name) VALUES (?, ?, ?)").bind(batchId, subjectId, batchName).run();
+        await db.prepare("INSERT OR IGNORE INTO learner_batch_members (batch_id, email) VALUES (?, ?)").bind(batchId, email).run();
+      }
+    } else if (action === "batch-access") {
+      const subjectId = clean(body.subjectId); const batchId = clean(body.batchId); const validFrom = clean(body.validFrom); const validUntil = clean(body.validUntil);
+      if (!subjectId || !batchId || !validFrom || !validUntil || new Date(validUntil) <= new Date(validFrom)) throw new Error("Choose a subject, batch, and valid duration.");
+      const batch = await db.prepare("SELECT id FROM learner_batches WHERE id = ? AND subject_id = ?").bind(batchId, subjectId).first();
+      if (!batch) throw new Error("The selected batch does not belong to the selected subject.");
+      const accessCode = String(Math.floor(1000 + Math.random() * 9000));
+      await db.prepare("INSERT INTO subject_access_keys (id, subject_id, batch_id, access_code, valid_from, valid_until) VALUES (?, ?, ?, ?, ?, ?)").bind(id("key"), subjectId, batchId, accessCode, new Date(validFrom).toISOString(), new Date(validUntil).toISOString()).run();
     } else if (action === "assignment") {
       const email = normalizeEmail(clean(body.email)); const subjectIds = Array.isArray(body.subjectIds) ? body.subjectIds.map(clean).filter(Boolean) : [];
       if (!validEmail(email)) throw new Error("Choose a learner.");
@@ -115,6 +134,14 @@ export async function PATCH(request: Request) {
   try {
     await guard(); const body = await request.json() as Record<string, unknown>; const db = database(); const action = clean(body.action);
     if (action === "learner-active") await db.prepare("UPDATE learner_profiles SET is_active = ? WHERE email = ?").bind(body.isActive ? 1 : 0, normalizeEmail(clean(body.email))).run();
+    else if (action === "subject-learner-active") {
+      const email = normalizeEmail(clean(body.email)); const subjectId = clean(body.subjectId);
+      if (!validEmail(email) || !subjectId) throw new Error("Choose a learner and subject.");
+      const assignment = await db.prepare("SELECT 1 FROM learner_subjects WHERE email = ? AND subject_id = ? LIMIT 1").bind(email, subjectId).first();
+      if (!assignment) throw new Error("Enroll this learner in the subject before changing their subject access.");
+      await db.prepare("INSERT OR REPLACE INTO learner_subject_status (email, subject_id, is_active, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)").bind(email, subjectId, body.isActive ? 1 : 0).run();
+    }
+    else if (action === "access-key-active") await db.prepare("UPDATE subject_access_keys SET is_active = ? WHERE id = ?").bind(body.isActive ? 1 : 0, clean(body.id)).run();
     else if (action === "admin-active") await db.prepare("UPDATE admin_accounts SET is_active = ? WHERE email = ?").bind(body.isActive ? 1 : 0, normalizeEmail(clean(body.email))).run();
     else if (action === "subject-active") await db.prepare("UPDATE subjects SET is_active = ? WHERE id = ?").bind(body.isActive ? 1 : 0, clean(body.id)).run();
     else if (action === "password") { const password = clean(body.password); if (password.length < 8) throw new Error("Use at least 8 characters."); await db.prepare("UPDATE admin_accounts SET password_hash = ? WHERE email = ?").bind(await passwordHash(password), normalizeEmail(clean(body.email))).run(); }
